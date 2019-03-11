@@ -13,6 +13,7 @@ import Data.Newtype (class Newtype)
 import Data.String (joinWith)
 import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..))
+import Matryoshka (class Recursive, cata)
 
 import Data.Foldable as F
 import Data.Map as M
@@ -218,6 +219,32 @@ data Contract
 derive instance eqContract :: Eq Contract
 
 derive instance ordContract :: Ord Contract
+
+data ContractF a
+  = NullF
+  | CommitF IdAction IdCommit Person Value Timeout Timeout a a
+  | PayF IdAction IdCommit Person Value Timeout a a
+  | BothF a a
+  | ChoiceF Observation a a
+  | WhenF Observation Timeout a a
+  | WhileF Observation Timeout a a
+  | ScaleF Value Value Value a
+  | LetF LetLabel a a
+  | UseF LetLabel
+
+derive instance functorContractF :: Functor ContractF
+
+instance recursiveContract :: Recursive Contract ContractF where
+  project Null = NullF
+  project (Commit idAction idCommit person value timeout1 timeout2 contract1 contract2) = CommitF idAction idCommit person value timeout1 timeout2 contract1 contract2
+  project (Pay idAction idCommit person value timeout contract1 contract2) = PayF idAction idCommit person value timeout contract1 contract2
+  project (Both contract1 contract2) = BothF contract1 contract2
+  project (Choice observation contract1 contract2) = ChoiceF observation contract1 contract2
+  project (When observation timeout contract1 contract2) = WhenF observation timeout contract1 contract2
+  project (While observation timeout contract1 contract2) = WhileF observation timeout contract1 contract2
+  project (Scale value1 value2 value3 contract) = ScaleF value1 value2 value3 contract
+  project (Let letLabel contract1 contract2) = LetF letLabel contract1 contract2
+  project (Use letLabel) = UseF letLabel
 
 instance showContract :: Show Contract where
   show Null = "Null"
@@ -560,48 +587,41 @@ collectNeededInputsFromObservation (TrueObs) = S.empty
 collectNeededInputsFromObservation (FalseObs) = S.empty
 
 collectNeededInputsFromContract :: Contract -> S.Set IdInput
-collectNeededInputsFromContract Null = S.empty
-
-collectNeededInputsFromContract (Commit _ _ _ value _ _ contract1 contract2) = S.unions [ collectNeededInputsFromValue value
-                                                                                        , collectNeededInputsFromContract contract1
-                                                                                        , collectNeededInputsFromContract contract2
-                                                                                        ]
-
-collectNeededInputsFromContract (Pay _ _ _ value _ contract1 contract2) = S.unions [ collectNeededInputsFromValue value
-                                                                                   , collectNeededInputsFromContract contract1
-                                                                                   , collectNeededInputsFromContract contract2
-                                                                                   ]
-
-collectNeededInputsFromContract (Both contract1 contract2) = S.unions [ collectNeededInputsFromContract contract1
-                                                                      , collectNeededInputsFromContract contract2
-                                                                      ]
-
-collectNeededInputsFromContract (Choice observation contract1 contract2) = S.unions [ collectNeededInputsFromObservation observation
-                                                                                    , collectNeededInputsFromContract contract1
-                                                                                    , collectNeededInputsFromContract contract2
-                                                                                    ]
-
-collectNeededInputsFromContract (When observation _ contract1 contract2) = S.unions [ collectNeededInputsFromObservation observation
-                                                                                    , collectNeededInputsFromContract contract1
-                                                                                    , collectNeededInputsFromContract contract2
-                                                                                    ]
-
-collectNeededInputsFromContract (While observation _ contract1 contract2) = S.unions [ collectNeededInputsFromObservation observation
-                                                                                     , collectNeededInputsFromContract contract1
-                                                                                     , collectNeededInputsFromContract contract2
-                                                                                     ]
-
-collectNeededInputsFromContract (Scale value1 value2 value3 contract) = S.unions [ collectNeededInputsFromValue value1
-                                                                                 , collectNeededInputsFromValue value2
-                                                                                 , collectNeededInputsFromValue value3
-                                                                                 , collectNeededInputsFromContract contract
-                                                                                 ]
-
-collectNeededInputsFromContract (Let _ contract1 contract2) = S.unions [ collectNeededInputsFromContract contract1
-                                                                       , collectNeededInputsFromContract contract2
-                                                                       ]
-
-collectNeededInputsFromContract (Use _) = S.empty
+collectNeededInputsFromContract = cata alg
+  where
+  alg NullF = S.empty
+  alg (CommitF _ _ _ value _ _ contract1 contract2) = S.unions [ collectNeededInputsFromValue value
+                                                               , contract1
+                                                               , contract2
+                                                               ]
+  alg (PayF _ _ _ value _ contract1 contract2) = S.unions [ collectNeededInputsFromValue value
+                                                          , contract1
+                                                          , contract2
+                                                          ]
+  alg (BothF contract1 contract2) = S.unions [ contract1
+                                             , contract2
+                                             ]
+  alg (ChoiceF observation contract1 contract2) = S.unions [ collectNeededInputsFromObservation observation
+                                                           , contract1
+                                                           , contract2
+                                                           ]
+  alg (WhenF observation _ contract1 contract2) = S.unions [ collectNeededInputsFromObservation observation
+                                                           , contract1
+                                                           , contract2
+                                                           ]
+  alg (WhileF observation _ contract1 contract2) = S.unions [ collectNeededInputsFromObservation observation
+                                                            , contract1
+                                                            , contract2
+                                                            ]
+  alg (ScaleF value1 value2 value3 contract) = S.unions [ collectNeededInputsFromValue value1
+                                                        , collectNeededInputsFromValue value2
+                                                        , collectNeededInputsFromValue value3
+                                                        , contract
+                                                        ]
+  alg (LetF _ contract1 contract2) = S.unions [ contract1
+                                              , contract2
+                                              ]
+  alg (UseF _) = S.empty
 
 -- Add inputs and action ids to state.
 -- Return Nothing on redundant or irrelevant inputs
@@ -797,25 +817,18 @@ lookupEnvironment = M.lookup
 maxIdFromContract ::
   Contract ->
   LetLabel
-maxIdFromContract Null = (fromInt 0)
-
-maxIdFromContract (Commit _ _ _ _ _ _ contract1 contract2) = (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (Pay _ _ _ _ _ contract1 contract2) = (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (Both contract1 contract2) = (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (Choice _ contract1 contract2) = (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (When _ _ contract1 contract2) = (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (While _ _ contract1 contract2) = (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (Scale _ _ _ contract) = (maxIdFromContract contract)
-
-maxIdFromContract (Let letLabel contract1 contract2) = max letLabel (max (maxIdFromContract contract1) (maxIdFromContract contract2))
-
-maxIdFromContract (Use letLabel) = letLabel
+maxIdFromContract = cata alg
+  where
+  alg NullF = fromInt 0
+  alg (CommitF _ _ _ _ _ _ contract1 contract2) = max contract1 contract2
+  alg (PayF _ _ _ _ _ contract1 contract2) = max contract1 contract2
+  alg (BothF contract1 contract2) = max contract1 contract2
+  alg (ChoiceF _ contract1 contract2) = max contract1 contract2
+  alg (WhenF _ _ contract1 contract2) = max contract1 contract2
+  alg (WhileF _ _ contract1 contract2) = max contract1 contract2
+  alg (ScaleF _ _ _ contract) = contract
+  alg (LetF letLabel contract1 contract2) = max letLabel (max contract1 contract2)
+  alg (UseF letLabel) = letLabel
 
 -- Looks for an unused label in the Environment and Contract provided
 -- (assuming that labels are numbers)
