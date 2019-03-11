@@ -1,17 +1,18 @@
 module Semantics where
 
+import Prelude
+
 import Data.BigInt (BigInt, fromInt, toString)
-import Data.Eq (class Eq, (/=), (==))
-import Data.EuclideanRing (div, mod)
-import Data.HeytingAlgebra (not, (&&), (||))
+import Data.Lens (Lens', over, set)
+import Data.Lens.At (at)
+import Data.Lens.Iso.Newtype (_Newtype)
+import Data.Lens.Record (prop)
 import Data.List (List(..), concat, foldl, foldr)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Ord (class Ord, max, (<), (<=), (>), (>=))
-import Data.Ring (negate, (*), (+), (-))
-import Data.Show (class Show)
+import Data.Newtype (class Newtype)
 import Data.String (joinWith)
+import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..))
-import Prelude (show)
 
 import Data.Foldable as F
 import Data.Map as M
@@ -339,14 +340,27 @@ type TimeoutData
 type CommitInfoRecord
   = {person :: Person, amount :: BigInt, timeout :: Timeout}
 
-data CommitInfo
+newtype CommitInfo
   = CommitInfo {redeemedPerPerson :: M.Map Person BigInt, currentCommitsById :: M.Map IdCommit CommitInfoRecord, expiredCommitIds :: S.Set IdCommit, timeoutData :: TimeoutData}
+
+derive instance newtypeCommitInfo :: Newtype CommitInfo _
+
+_currentCommitsById :: Lens' CommitInfo (M.Map IdCommit CommitInfoRecord)
+_currentCommitsById = _Newtype <<< prop (SProxy :: SProxy "currentCommitsById")
+
+_timeoutData :: Lens' CommitInfo TimeoutData
+_timeoutData = _Newtype <<< prop (SProxy :: SProxy "timeoutData")
 
 type OracleDataPoint
   = {blockNumber :: BlockNumber, value :: BigInt}
 
-data State
+newtype State
   = State {commits :: CommitInfo, choices :: M.Map WIdChoice Choice, oracles :: M.Map IdOracle OracleDataPoint, usedIds :: S.Set IdAction}
+
+derive instance newtypeState :: Newtype State _
+
+_commits :: Lens' State CommitInfo
+_commits = _Newtype <<< prop (SProxy :: SProxy "commits")
 
 -- Adds a commit identifier to the timeout data map
 addToCommByTim ::
@@ -379,12 +393,10 @@ addCommit ::
   Timeout ->
   State ->
   State
-addCommit idCommit person value timeout (State state) = State (state { commits = CommitInfo (ci { currentCommitsById = M.insert idCommit ({ person
-                                                                                                                                          , amount: value
-                                                                                                                                          , timeout
-                                                                                                                                          }) ci.currentCommitsById, timeoutData = addToCommByTim timeout idCommit ci.timeoutData }) })
-  where
-  (CommitInfo ci) = state.commits
+addCommit idCommit person amount timeout = set (_commits <<< _currentCommitsById <<< at idCommit) (Just { person
+                                                                                                        , amount
+                                                                                                        , timeout
+                                                                                                        }) >>> over (_commits <<< _timeoutData) (addToCommByTim timeout idCommit)
 
 -- Return the person corresponding to a commit
 personForCurrentCommit ::
