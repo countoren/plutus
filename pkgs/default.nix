@@ -56595,6 +56595,45 @@ description = "Haskell bindings to Plotly.js";
 license = stdenv.lib.licenses.mit;
 
 }) {};
+"plutus-contract-exe" = callPackage
+({
+  mkDerivation
+, aeson
+, base
+, plutus-use-cases
+, servant
+, servant-server
+, stdenv
+, text
+, wallet-api
+, warp
+}:
+mkDerivation {
+
+pname = "plutus-contract-exe";
+version = "0.1.0.0";
+src = .././plutus-contract-exe;
+isLibrary = true;
+isExecutable = true;
+libraryHaskellDepends = [
+aeson
+base
+text
+wallet-api
+];
+executableHaskellDepends = [
+base
+plutus-use-cases
+servant
+servant-server
+text
+warp
+];
+doHaddock = false;
+homepage = "https://github.com/iohk/plutus#readme";
+license = stdenv.lib.licenses.asl20;
+
+}) {};
 "plutus-core-interpreter" = callPackage
 ({
   mkDerivation
@@ -56957,6 +56996,8 @@ license = stdenv.lib.licenses.asl20;
 ({
   mkDerivation
 , base
+, bytestring
+, containers
 , doctest
 , language-plutus-core
 , markdown-unlit
@@ -56972,12 +57013,26 @@ version = "0.1.0.0";
 src = .././plutus-tutorial;
 libraryHaskellDepends = [
 base
+bytestring
+containers
 language-plutus-core
 plutus-tx
 template-haskell
 wallet-api
 ];
 libraryToolDepends = [
+doctest
+];
+testHaskellDepends = [
+base
+bytestring
+containers
+language-plutus-core
+plutus-tx
+template-haskell
+wallet-api
+];
+testToolDepends = [
 doctest
 markdown-unlit
 ];
