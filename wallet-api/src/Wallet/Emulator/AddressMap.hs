@@ -20,7 +20,8 @@ import           Control.Lens           (At (..), Index, IxValue, Ixed (..), len
 import           Data.Aeson             (FromJSON (..), ToJSON (..), withText)
 import qualified Data.Aeson             as JSON
 import           Data.Bifunctor         (first)
-import qualified Data.ByteString.Base64 as Base64
+import qualified Data.ByteString        as BSS
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy   as BSL
 import           Data.Map               (Map)
 import qualified Data.Map               as Map
@@ -49,13 +50,15 @@ newtype AddressMap = AddressMap { getAddressMap :: Map Address (Map TxOutRef TxO
 -- than what we have here.
 
 instance ToJSON AddressMap where
-    toJSON = JSON.String . TE.decodeUtf8 . Base64.encode . Write.toStrictByteString . encode
+    toJSON = JSON.String . TE.decodeUtf8 . Base16.encode . Write.toStrictByteString . encode
 
 instance FromJSON AddressMap where
     parseJSON = withText "AddressMap" $ \s -> do
-        let ev = do
-                eun64 <- Base64.decode . TE.encodeUtf8 $ s
-                first show $ deserialiseOrFail $ BSL.fromStrict eun64
+        let ev =
+                let (eun16, rest) = Base16.decode . TE.encodeUtf8 $ s in
+                if BSS.null rest
+                then first show $ deserialiseOrFail $ BSL.fromStrict eun16
+                else fail "failed to decode base16"
         either fail pure ev
 
 instance Semigroup AddressMap where

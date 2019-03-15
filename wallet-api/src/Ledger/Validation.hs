@@ -54,8 +54,9 @@ import           Data.Aeson                   (FromJSON, ToJSON (toJSON), withTe
 import qualified Data.Aeson                   as JSON
 import           Data.Bifunctor               (first)
 import qualified Data.ByteString.Lazy.Hash    as Hash
-import qualified Data.ByteString.Base64       as Base64
+import qualified Data.ByteString.Base16       as Base16
 import qualified Data.ByteString.Lazy         as BSL
+import qualified Data.ByteString              as BSS
 import           Data.Proxy                   (Proxy (Proxy))
 import           Data.Swagger.Internal.Schema (ToSchema (declareNamedSchema), paramSchemaToSchema, plain)
 import qualified Data.Text.Encoding           as TE
@@ -184,13 +185,15 @@ instance ToSchema ValidatorHash where
     declareNamedSchema _ = plain . paramSchemaToSchema $ (Proxy :: Proxy String)
 
 instance ToJSON ValidatorHash where
-    toJSON = JSON.String . TE.decodeUtf8 . Base64.encode . BSL.toStrict . serialise
+    toJSON = JSON.String . TE.decodeUtf8 . Base16.encode . BSL.toStrict . serialise
 
 instance FromJSON ValidatorHash where
     parseJSON = withText "ValidatorScript" $ \s -> do
-        let ev = do
-                eun64 <- Base64.decode . TE.encodeUtf8 $ s
-                first show $ deserialiseOrFail $ BSL.fromStrict eun64
+        let ev =
+                let (eun16, rest) = Base16.decode . TE.encodeUtf8 $ s in
+                if BSS.null rest
+                then first show $ deserialiseOrFail $ BSL.fromStrict eun16
+                else fail "failed to decode base16"
         case ev of
             Left e  -> fail e
             Right v -> pure v

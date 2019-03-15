@@ -56957,6 +56957,8 @@ license = stdenv.lib.licenses.asl20;
 ({
   mkDerivation
 , base
+, bytestring
+, containers
 , doctest
 , language-plutus-core
 , markdown-unlit
@@ -56972,12 +56974,26 @@ version = "0.1.0.0";
 src = .././plutus-tutorial;
 libraryHaskellDepends = [
 base
+bytestring
+containers
 language-plutus-core
 plutus-tx
 template-haskell
 wallet-api
 ];
 libraryToolDepends = [
+doctest
+];
+testHaskellDepends = [
+base
+bytestring
+containers
+language-plutus-core
+plutus-tx
+template-haskell
+wallet-api
+];
+testToolDepends = [
 doctest
 markdown-unlit
 ];
@@ -79302,7 +79318,7 @@ license = stdenv.lib.licenses.mit;
   mkDerivation
 , aeson
 , base
-, base64-bytestring
+, base16-bytestring
 , bytestring
 , cborg
 , containers
@@ -79343,7 +79359,7 @@ isExecutable = true;
 libraryHaskellDepends = [
 aeson
 base
-base64-bytestring
+base16-bytestring
 bytestring
 cborg
 containers

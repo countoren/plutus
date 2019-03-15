@@ -105,7 +105,7 @@ import qualified Data.Aeson                               as JSON
 import           Data.Bifunctor                           (first)
 import qualified Data.ByteArray                           as BA
 import qualified Data.ByteString                          as BSS
-import qualified Data.ByteString.Base64                   as Base64
+import qualified Data.ByteString.Base16                   as Base16
 import qualified Data.ByteString.Char8                    as BS8
 import qualified Data.ByteString.Lazy                     as BSL
 import           Data.Map                                 (Map)
@@ -197,7 +197,7 @@ instance Serialise (Digest SHA256) where
       Just v  -> pure v
 
 instance ToJSON (Digest SHA256) where
-  toJSON = JSON.String . TE.decodeUtf8 . Base64.encode . Write.toStrictByteString . encode
+  toJSON = JSON.String . TE.decodeUtf8 . Base16.encode . Write.toStrictByteString . encode
 
 instance ToSchema (Digest SHA256) where
   declareNamedSchema _ = plain . paramSchemaToSchema $ (Proxy :: Proxy String)
@@ -205,8 +205,10 @@ instance ToSchema (Digest SHA256) where
 instance FromJSON (Digest SHA256) where
   parseJSON = withText "SHA256" $ \s -> do
     let ev = do
-          eun64 <- Base64.decode . TE.encodeUtf8 $ s
-          first show $ deserialiseOrFail $ BSL.fromStrict eun64
+          let (eun16, rest) = Base16.decode . TE.encodeUtf8 $ s
+          if BSS.null rest
+          then first show $ deserialiseOrFail $ BSL.fromStrict eun16
+          else fail "failed to decode base16"
     case ev of
       Left e  -> fail e
       Right v -> pure v
@@ -270,13 +272,15 @@ evaluateScript :: Script -> ([String], Bool)
 evaluateScript (getPlc -> s) = (isJust . evaluationResultToMaybe) <$> evaluateCekTrace s
 
 instance ToJSON Script where
-  toJSON = JSON.String . TE.decodeUtf8 . Base64.encode . BSL.toStrict . serialise
+  toJSON = JSON.String . TE.decodeUtf8 . Base16.encode . BSL.toStrict . serialise
 
 instance FromJSON Script where
   parseJSON = withText "Script" $ \s -> do
-    let ev = do
-          eun64 <- Base64.decode . TE.encodeUtf8 $ s
-          first show $ deserialiseOrFail $ BSL.fromStrict eun64
+    let ev =
+            let (eun16, rest) = Base16.decode . TE.encodeUtf8 $ s in
+            if BSS.null rest
+            then first show $ deserialiseOrFail $ BSL.fromStrict eun16
+            else fail "failed to decode base16"
     case ev of
       Left e  -> fail e
       Right v -> pure v

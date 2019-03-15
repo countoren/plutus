@@ -65,7 +65,7 @@ library
     build-depends:
         base >=4.9 && <5,
         aeson -any,
-        base64-bytestring -any,
+        base16-bytestring -any,
         bytestring -any,
         cborg -any,
         containers -any,
