@@ -52,9 +52,18 @@ ensureMkFunctionExists script =
             Nothing -> script <> "\n$(mkFunctions [])"
             Just _  -> script
 
+ensureKnownCurrenciesExists :: Text -> Text
+ensureKnownCurrenciesExists script =
+    let scriptString = Text.unpack script
+        regex = Regex.mkRegex "^\\$\\(mkKnownCurrencies \\[.*])"
+        mMatches = Regex.matchRegexAll regex scriptString
+     in case mMatches of
+            Nothing -> script <> "\n$(mkKnownCurrencies [])"
+            Just _  -> script
+
 mkCompileScript :: Text -> Text
 mkCompileScript script =
-    (ensureMkFunctionExists . replaceModuleName) script <> "\n\nmain :: IO ()" <>
+    (ensureKnownCurrenciesExists . ensureMkFunctionExists . replaceModuleName) script <> "\n\nmain :: IO ()" <>
     "\nmain = printSchemas schemas"
 
 avoidUnsafe :: (MonadError PlaygroundError m) => SourceCode -> m ()

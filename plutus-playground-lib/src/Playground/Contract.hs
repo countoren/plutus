@@ -1,5 +1,6 @@
 -- | Re-export functions that are needed when creating a Contract for use in the playground
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-missing-import-lists #-}
@@ -7,6 +8,7 @@
 module Playground.Contract
     ( mkFunctions
     , mkFunction
+    , mkKnownCurrencies
     , ToSchema
     , Schema
     , ToJSON
@@ -34,7 +36,7 @@ import           Data.Swagger                (Schema, ToSchema)
 import           GHC.Generics                (Generic)
 import           Playground.API              (FunctionSchema)
 import           Playground.Interpreter.Util
-import           Playground.TH               (mkFunction, mkFunctions, mkSingleFunction)
+import           Playground.TH               (mkFunction, mkFunctions, mkSingleFunction, mkKnownCurrencies)
 import           Wallet.API                  (payToPublicKey_)
 import           Wallet.Emulator             (addBlocksAndNotify, runWalletActionAndProcessPending)
 import           Wallet.Emulator.Types       (MockWallet, Wallet (..))

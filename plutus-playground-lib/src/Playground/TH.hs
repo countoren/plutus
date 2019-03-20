@@ -1,18 +1,28 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE DeriveAnyClass       #-}
 
 module Playground.TH
     ( mkFunction
     , mkFunctions
     , mkSingleFunction
+    , TokenId(..)
+    , KnownCurrency(..)
+    , mkKnownCurrencies
     ) where
 
+import           Data.ByteString.Lazy        (ByteString)
+import           Data.List.NonEmpty  (NonEmpty)
 import           Data.Proxy          (Proxy (Proxy))
 import           Data.Swagger.Schema (toInlinedSchema)
-import           Data.Text           (pack)
+import           Data.Text           (pack, Text)
+import           GHC.Generics        (Generic)
+import           Data.Aeson          (ToJSON)
 import           Language.Haskell.TH (Body (NormalB), Clause (Clause), Dec (FunD, ValD), Exp (ListE, VarE), Info (VarI),
                                       Name, Pat (VarP), Q, Type (AppT, ArrowT, ConT, ForallT, TupleT, VarT), mkName,
                                       nameBase, reify)
 import           Playground.API      (Fn (Fn), FunctionSchema (FunctionSchema))
+import           Ledger.Validation   (ValidatorHash)
 
 mkFunctions :: [Name] -> Q [Dec]
 mkFunctions names = do
@@ -83,3 +93,23 @@ args (ConT _)                   = []
 args (TupleT _)                 = []
 args (AppT (VarT _) t)          = args t
 args a                          = error $ "incorrect type in template haskell function: " ++ show a
+
+-- FIXME: These types will be defined elsewhere but I've added them here for now
+newtype TokenId = TokenId Text
+    deriving (Generic, ToJSON)
+
+data KnownCurrency = KnownCurrency 
+    { hash :: ValidatorHash
+    , friendlyName :: String
+    , knownTokens :: NonEmpty TokenId
+    }
+    deriving (Generic, ToJSON)
+
+-- TODO: add a type declaration to registeredKnownCurrencies
+mkKnownCurrencies :: [Name] -> Q [Dec]
+mkKnownCurrencies ks = do
+                        let name = mkName "registeredKnownCurrencies"
+                            names = fmap VarE ks
+                        let body = NormalB (ListE names)
+                            val = ValD (VarP name) body []
+                        pure [val]
